@@ -522,13 +522,16 @@ function stopExtensionServer() {
 }
 
 // ── System tray ────────────────────────────────────────────────────────────────
+function getIconPath() {
+  // In packaged app, icon is in resources; in dev, it's in the project root
+  const devPath = path.join(__dirname, 'icon.ico');
+  if (existsSync(devPath)) return devPath;
+  return path.join(process.resourcesPath, 'icon.ico');
+}
+
 function createTray() {
-  // Create a simple 16x16 tray icon (purple square)
-  const icon = nativeImage.createFromBuffer(
-    Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAMklEQVQ4T2NkYPj/n4EBFTAi82EKsKpH1oBNM1YNOA3A5mSsXsIWJrg0E4wDXIEOAHYgOBHKCCDaAAAAAElFTkSuQmCC', 'base64'),
-    { width: 16, height: 16 }
-  );
-  tray = new Tray(icon);
+  const icon = nativeImage.createFromPath(getIconPath());
+  tray = new Tray(icon.resize({ width: 16, height: 16 }));
   tray.setToolTip('AudioSnatch');
   const contextMenu = Menu.buildFromTemplate([
     { label: 'Show', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
@@ -666,6 +669,7 @@ function createWindow() {
     minWidth: 520,
     minHeight: 500,
     autoHideMenuBar: true,
+    icon: getIconPath(),
     backgroundColor: '#0e0e0e',
     webPreferences: {
       nodeIntegration: true,
