@@ -747,6 +747,8 @@ ipcMain.handle('install-update', () => {
   autoUpdater.quitAndInstall();
 });
 
+ipcMain.handle('get-app-version', () => app.getVersion());
+
 // ── App lifecycle ──────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
   createTray();

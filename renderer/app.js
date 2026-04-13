@@ -1020,28 +1020,67 @@ function escapeHtml(str) {
 }
 
 // ── Auto-update UI ─────────────────────────────────────────────────────────────
-ipcRenderer.on('update-status', (_e, { status, version, percent }) => {
-  const banner = $('update-banner');
-  const text = $('update-text');
-  const btn = $('update-action');
+let updateReady = false;
 
+function showUpdateStatus(msg, isReady, version) {
+  // Top banner
+  const banner = $('update-banner');
+  const bannerText = $('update-text');
+  const bannerBtn = $('update-action');
+
+  bannerText.textContent = msg;
+  if (isReady) {
+    bannerBtn.textContent = 'Restart to Update';
+    bannerBtn.style.display = '';
+  } else {
+    bannerBtn.style.display = 'none';
+  }
+  banner.classList.add('show');
+
+  // Settings section
+  $('update-settings-status').style.display = 'flex';
+  $('update-settings-text').textContent = msg;
+  if (isReady) {
+    $('btn-install-update').style.display = '';
+    updateReady = true;
+  }
+}
+
+ipcRenderer.on('update-status', (_e, { status, version, percent }) => {
   if (status === 'available') {
-    text.textContent = `Downloading update v${version}…`;
-    btn.style.display = 'none';
-    banner.classList.add('show');
+    showUpdateStatus(`Downloading update v${version}…`, false);
   } else if (status === 'downloading') {
-    text.textContent = `Downloading update… ${percent?.toFixed(0) || 0}%`;
+    showUpdateStatus(`Downloading update… ${percent?.toFixed(0) || 0}%`, false);
   } else if (status === 'ready') {
-    text.textContent = `Update v${version} ready!`;
-    btn.textContent = 'Restart to Update';
-    btn.style.display = '';
-    banner.classList.add('show');
+    showUpdateStatus(`Update v${version} ready!`, true, version);
   }
 });
 
-$('update-action').addEventListener('click', () => {
-  ipcRenderer.invoke('install-update');
+$('update-action').addEventListener('click', () => ipcRenderer.invoke('install-update'));
+$('btn-install-update').addEventListener('click', () => ipcRenderer.invoke('install-update'));
+
+// Check for updates button in settings
+$('btn-check-updates').addEventListener('click', async () => {
+  $('btn-check-updates').disabled = true;
+  $('btn-check-updates').textContent = 'Checking…';
+  $('update-settings-status').style.display = 'flex';
+  $('update-settings-text').textContent = 'Checking for updates…';
+
+  await ipcRenderer.invoke('check-for-updates');
+
+  // Give it a few seconds to respond
+  setTimeout(() => {
+    if (!updateReady) {
+      $('update-settings-text').textContent = 'You\'re on the latest version.';
+      $('update-settings-text').style.color = 'var(--green)';
+    }
+    $('btn-check-updates').disabled = false;
+    $('btn-check-updates').textContent = 'Check for Updates';
+  }, 5000);
 });
+
+// Show current version
+ipcRenderer.invoke('get-app-version').then(v => $('current-version').textContent = `v${v}`);
 
 // ── Init ───────────────────────────────────────────────────────────────────────
 init();
