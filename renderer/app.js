@@ -537,15 +537,30 @@ function makeIconBtn(icon, extraClass, onClick, title) {
 }
 
 // ── Audio preview player ───────────────────────────────────────────────────────
-async function playPreview(item) {
-  if (currentPreviewAudio) { currentPreviewAudio.pause(); currentPreviewAudio = null; }
+function stopPreview() {
+  if (currentPreviewAudio) {
+    currentPreviewAudio.pause();
+    currentPreviewAudio.removeAttribute('src');
+    currentPreviewAudio.load(); // fully release the media resource
+    currentPreviewAudio = null;
+  }
+  currentPreviewItemId = null;
+  previewBar.classList.remove('show');
+  $('preview-play').textContent = '▶';
+  previewSeek.value = 0;
+  previewTime.textContent = '0:00';
+  previewTitle.textContent = '—';
+}
 
+async function playPreview(item) {
+  // If clicking the same item, toggle off
   if (currentPreviewItemId === item.id) {
-    // Toggle off
-    currentPreviewItemId = null;
-    previewBar.classList.remove('show');
+    stopPreview();
     return;
   }
+
+  // Stop any existing playback first
+  stopPreview();
 
   const fileUrl = await ipcRenderer.invoke('get-file-url', item.filepath);
   if (!fileUrl) return;
@@ -557,13 +572,15 @@ async function playPreview(item) {
   $('preview-play').textContent = '⏸';
 
   currentPreviewAudio.addEventListener('timeupdate', () => {
-    if (currentPreviewAudio.duration) {
+    if (currentPreviewAudio && currentPreviewAudio.duration) {
       previewSeek.value = (currentPreviewAudio.currentTime / currentPreviewAudio.duration) * 100;
       previewTime.textContent = formatTime(currentPreviewAudio.currentTime);
     }
   });
+
   currentPreviewAudio.addEventListener('ended', () => {
-    $('preview-play').textContent = '▶';
+    // Fully stop — do NOT auto-play anything else
+    stopPreview();
   });
 
   currentPreviewAudio.play();
@@ -582,9 +599,7 @@ previewSeek.addEventListener('input', () => {
 });
 
 $('preview-close').addEventListener('click', () => {
-  if (currentPreviewAudio) { currentPreviewAudio.pause(); currentPreviewAudio = null; }
-  currentPreviewItemId = null;
-  previewBar.classList.remove('show');
+  stopPreview();
 });
 
 function formatTime(s) {
