@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; media-src 'self' file:;">
+  <title>AudioSnatch</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0e0e0e; --bg1: #141414; --bg2: #1a1a1a; --bg3: #222;
+      --border: #2a2a2a; --text: #e0e0e0; --text2: #888; --text3: #555;
+      --accent: #6c5ce7; --accent2: #a29bfe; --accent-bg: #6c5ce715;
+      --green: #00b894; --red: #ff6b6b; --yellow: #ffc048;
+    }
+    body {
+      font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      height: 100vh; display: flex; flex-direction: column;
+      user-select: none; overflow: hidden;
+    }
+
+    /* ── Top bar ──────────────────────── */
+    .topbar {
+      display: flex; align-items: center; gap: 16px;
+      padding: 16px 24px 0; flex-shrink: 0;
+    }
+    .topbar h1 { font-size: 20px; font-weight: 700; color: #fff; white-space: nowrap; }
+    .tab-bar { display: flex; gap: 2px; margin-left: 16px; }
+    .tab-btn {
+      padding: 6px 14px; border: none; border-radius: 6px;
+      background: transparent; color: var(--text3); font-size: 12px;
+      cursor: pointer; transition: all 0.15s; font-weight: 500;
+    }
+    .tab-btn:hover { color: var(--text2); background: var(--bg2); }
+    .tab-btn.active { color: var(--accent2); background: var(--accent-bg); }
+
+    /* ── Tab content ──────────────────── */
+    .tab-content { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+    .tab-content.active { display: flex; }
+
+    /* ── Queue tab ────────────────────── */
+    .input-section { padding: 16px 24px 0; flex-shrink: 0; }
+    .input-row { display: flex; gap: 8px; }
+    .url-input {
+      flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--bg1); color: #fff; font-size: 14px; outline: none; transition: border-color 0.2s;
+    }
+    .url-input:focus { border-color: var(--accent); }
+    .url-input::placeholder { color: #444; }
+
+    .btn-primary {
+      padding: 10px 18px; border: none; border-radius: 8px;
+      background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; transition: background 0.15s;
+    }
+    .btn-primary:hover { background: #5a4bd1; }
+    .btn-primary:disabled { background: var(--bg3); color: var(--text3); cursor: not-allowed; }
+
+    /* Update banner */
+    .update-banner {
+      display: none; align-items: center; gap: 8px;
+      padding: 8px 16px; background: #00b89418; border-bottom: 1px solid #00b89430;
+      font-size: 12px; color: var(--green); flex-shrink: 0;
+    }
+    .update-banner.show { display: flex; }
+    .update-banner span { flex: 1; }
+    .update-banner button {
+      padding: 4px 12px; border: 1px solid var(--green); border-radius: 4px;
+      background: transparent; color: var(--green); font-size: 11px; cursor: pointer;
+    }
+    .update-banner button:hover { background: #00b89418; }
+
+    /* Clipboard banner */
+    .clipboard-banner {
+      display: none; align-items: center; gap: 8px; margin-top: 8px;
+      padding: 8px 12px; border-radius: 8px; background: var(--accent-bg);
+      border: 1px solid #6c5ce730; font-size: 12px; color: var(--accent2);
+    }
+    .clipboard-banner.show { display: flex; }
+    .clipboard-banner .url-preview { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .clipboard-banner button {
+      padding: 4px 10px; border: 1px solid var(--accent); border-radius: 4px;
+      background: transparent; color: var(--accent2); font-size: 11px; cursor: pointer;
+    }
+    .clipboard-banner button:hover { background: var(--accent-bg); }
+    .clipboard-banner .dismiss { border: none; color: var(--text3); font-size: 14px; }
+
+    /* Controls row */
+    .controls-row {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      margin-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--bg2);
+    }
+    .controls-row label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+    .pill-group { display: flex; gap: 2px; }
+    .pill-btn {
+      padding: 4px 10px; border: 1px solid var(--border); border-radius: 5px;
+      background: var(--bg1); color: var(--text2); font-size: 11px;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .pill-btn:hover { border-color: #444; color: #ccc; }
+    .pill-btn.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent2); font-weight: 600; }
+
+    .controls-right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+    .btn-small {
+      padding: 4px 10px; border: 1px solid var(--border); border-radius: 5px;
+      background: transparent; color: var(--text3); font-size: 11px;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .btn-small:hover { border-color: #444; color: var(--text2); }
+
+    /* Queue list */
+    .queue-list {
+      flex: 1; overflow-y: auto; padding: 12px 24px 12px;
+    }
+    .queue-list::-webkit-scrollbar { width: 5px; }
+    .queue-list::-webkit-scrollbar-track { background: transparent; }
+    .queue-list::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+
+    .queue-empty { text-align: center; color: #333; font-size: 13px; margin-top: 60px; line-height: 1.8; }
+
+    .group-label {
+      font-size: 10px; font-weight: 600; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      margin: 12px 0 6px; padding-left: 2px;
+    }
+    .group-label:first-child { margin-top: 0; }
+
+    .queue-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; margin-bottom: 3px; border-radius: 8px;
+      background: var(--bg1); border: 1px solid #1c1c1c; transition: border-color 0.15s;
+    }
+    .queue-item:hover { border-color: var(--border); }
+
+    .item-thumb {
+      width: 48px; height: 36px; border-radius: 4px; object-fit: cover;
+      background: var(--bg3); flex-shrink: 0;
+    }
+
+    .item-status { flex-shrink: 0; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
+    .st-pending { width: 7px; height: 7px; border-radius: 50%; background: #333; }
+    .st-active { width: 14px; height: 14px; border: 2px solid #6c5ce740; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    .st-done::after { content: '✓'; color: var(--green); font-size: 14px; font-weight: 700; }
+    .st-failed::after { content: '✗'; color: var(--red); font-size: 14px; font-weight: 700; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .item-info { flex: 1; min-width: 0; }
+    .item-title { font-size: 12px; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-detail { font-size: 11px; color: var(--text3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-detail.is-file { color: var(--green); }
+    .item-detail.is-error { color: var(--red); white-space: normal; }
+
+    .item-bar { height: 3px; background: var(--bg3); border-radius: 2px; margin-top: 3px; overflow: hidden; }
+    .item-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; transition: width 0.3s; }
+
+    .item-actions { display: flex; gap: 2px; flex-shrink: 0; }
+    .btn-icon {
+      width: 24px; height: 24px; border: none; border-radius: 5px;
+      background: transparent; color: #444; font-size: 13px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+    }
+    .btn-icon:hover { background: #ffffff10; color: var(--text2); }
+    .btn-icon.danger:hover { background: #ff6b6b15; color: var(--red); }
+    .btn-icon.play:hover { background: #00b89415; color: var(--green); }
+
+    .queue-item.state-done { opacity: 0.65; }
+    .queue-item.state-failed { border-color: #ff6b6b25; }
+
+    /* ── Search tab ───────────────────── */
+    .search-section { padding: 16px 24px 0; flex-shrink: 0; }
+    .search-results {
+      flex: 1; overflow-y: auto; padding: 12px 24px;
+    }
+    .search-results::-webkit-scrollbar { width: 5px; }
+    .search-results::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+
+    .search-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px; margin-bottom: 4px; border-radius: 8px;
+      background: var(--bg1); border: 1px solid #1c1c1c; cursor: pointer; transition: border-color 0.15s;
+    }
+    .search-item:hover { border-color: var(--border); }
+    .search-thumb { width: 80px; height: 45px; border-radius: 4px; object-fit: cover; background: var(--bg3); flex-shrink: 0; }
+    .search-info { flex: 1; min-width: 0; }
+    .search-title { font-size: 13px; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .search-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+    .search-empty { text-align: center; color: #333; font-size: 13px; margin-top: 60px; }
+
+    /* ── History tab ───────────────────── */
+    .history-section { padding: 16px 24px 0; flex-shrink: 0; }
+    .history-list { flex: 1; overflow-y: auto; padding: 12px 24px; }
+    .history-list::-webkit-scrollbar { width: 5px; }
+    .history-list::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+
+    .history-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; margin-bottom: 3px; border-radius: 8px;
+      background: var(--bg1); border: 1px solid #1c1c1c;
+    }
+    .history-info { flex: 1; min-width: 0; }
+    .history-title { font-size: 12px; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-meta { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+    /* ── Settings tab ─────────────────── */
+    .settings-scroll { flex: 1; overflow-y: auto; padding: 20px 24px; }
+    .settings-scroll::-webkit-scrollbar { width: 5px; }
+    .settings-scroll::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+
+    .setting-group { margin-bottom: 24px; }
+    .setting-group h3 { font-size: 12px; color: var(--accent2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+
+    .setting-row {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+    }
+    .setting-label { font-size: 13px; color: var(--text); min-width: 160px; }
+    .setting-desc { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+    .toggle {
+      width: 36px; height: 20px; border-radius: 10px;
+      background: var(--bg3); cursor: pointer; position: relative; transition: background 0.2s;
+      border: none; padding: 0; flex-shrink: 0;
+    }
+    .toggle::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #666; transition: all 0.2s;
+    }
+    .toggle.on { background: var(--accent); }
+    .toggle.on::after { left: 18px; background: #fff; }
+
+    .setting-input {
+      padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg1); color: #fff; font-size: 13px; outline: none; width: 100px;
+    }
+    .setting-input:focus { border-color: var(--accent); }
+
+    .setting-path {
+      flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg1); color: var(--text2); font-size: 12px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ── Modals ────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: #000000aa;
+      z-index: 100; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--bg1); border: 1px solid var(--border); border-radius: 12px;
+      padding: 24px; width: 440px; max-height: 80vh; overflow-y: auto;
+    }
+    .modal h2 { font-size: 16px; color: #fff; margin-bottom: 16px; }
+    .modal-field { margin-bottom: 12px; }
+    .modal-field label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .modal-field input, .modal-field textarea {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg); color: #fff; font-size: 13px; outline: none; font-family: inherit;
+    }
+    .modal-field textarea { height: 160px; resize: vertical; }
+    .modal-field input:focus, .modal-field textarea:focus { border-color: var(--accent); }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+    .btn-modal {
+      padding: 8px 18px; border: none; border-radius: 6px; font-size: 13px;
+      cursor: pointer; font-weight: 500;
+    }
+    .btn-modal.primary { background: var(--accent); color: #fff; }
+    .btn-modal.primary:hover { background: #5a4bd1; }
+    .btn-modal.secondary { background: var(--bg3); color: var(--text2); }
+    .btn-modal.secondary:hover { background: #333; }
+
+    /* ── Preview bar ──────────────────── */
+    .preview-bar {
+      display: none; align-items: center; gap: 12px;
+      padding: 10px 24px; background: var(--bg2); border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .preview-bar.show { display: flex; }
+    .preview-bar .preview-title { font-size: 12px; color: var(--text2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .preview-bar button { background: none; border: none; color: var(--text2); font-size: 16px; cursor: pointer; }
+    .preview-bar button:hover { color: #fff; }
+    .preview-bar .seek {
+      flex: 1; max-width: 200px; height: 3px; -webkit-appearance: none; appearance: none;
+      background: var(--bg3); border-radius: 2px; outline: none; cursor: pointer;
+    }
+    .preview-bar .seek::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 10px; height: 10px;
+      border-radius: 50%; background: var(--accent); cursor: pointer;
+    }
+    .preview-time { font-size: 11px; color: var(--text3); min-width: 35px; }
+
+    /* ── Drag overlay ─────────────────── */
+    .drag-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: #0e0e0eee; align-items: center; justify-content: center;
+      flex-direction: column; gap: 12px;
+    }
+    .drag-overlay.show { display: flex; }
+    .drag-overlay .drag-icon { font-size: 48px; opacity: 0.3; }
+    .drag-overlay .drag-text { font-size: 16px; color: var(--text2); }
+
+    /* ── Setup screen ─────────────────── */
+    .setup-screen {
+      display: none; align-items: center; justify-content: center;
+      height: 100vh; text-align: center; position: fixed; inset: 0;
+      background: var(--bg); z-index: 300;
+    }
+    .setup-screen.show { display: flex; }
+    .setup-inner { width: 360px; }
+    .setup-inner h2 { font-size: 20px; margin-bottom: 8px; color: #fff; }
+    .setup-inner p { font-size: 13px; color: #666; margin-bottom: 24px; }
+    .setup-bar-track { width: 100%; height: 6px; background: #1e1e1e; border-radius: 3px; overflow: hidden; }
+    .setup-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 3px; transition: width 0.3s; }
+    .setup-status { font-size: 13px; color: var(--text2); margin-top: 12px; }
+    .btn-retry {
+      margin-top: 16px; padding: 10px 28px; border: 1px solid var(--red); border-radius: 8px;
+      background: transparent; color: var(--red); font-size: 13px; cursor: pointer; display: none;
+    }
+    .btn-retry:hover { background: #ff6b6b15; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <!-- ── Setup ─────────────────────────────────────────────────── -->
+  <div class="setup-screen" id="setup-screen">
+    <div class="setup-inner">
+      <h2>First-Time Setup</h2>
+      <p>Downloading yt-dlp and ffmpeg.<br>This only happens once.</p>
+      <div class="setup-bar-track"><div class="setup-bar-fill" id="setup-bar"></div></div>
+      <div class="setup-status" id="setup-status">Preparing…</div>
+      <button class="btn-retry" id="btn-retry">Retry Setup</button>
+    </div>
+  </div>
+
+  <!-- ── App ───────────────────────────────────────────────────── -->
+  <div id="main-screen" style="display:none;flex-direction:column;height:100vh;">
+    <!-- Update banner -->
+    <div class="update-banner" id="update-banner">
+      <span id="update-text">A new version is available!</span>
+      <button id="update-action">Restart to Update</button>
+    </div>
+
+    <!-- Top bar -->
+    <div class="topbar">
+      <h1>AudioSnatch</h1>
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="queue">Queue</button>
+        <button class="tab-btn" data-tab="search">Search</button>
+        <button class="tab-btn" data-tab="history">History</button>
+        <button class="tab-btn" data-tab="settings">Settings</button>
+      </div>
+    </div>
+
+    <!-- ── Queue tab ─────────────────────────────────────────── -->
+    <div class="tab-content active" id="tab-queue">
+      <div class="input-section">
+        <div class="input-row">
+          <input type="text" class="url-input" id="url-input" placeholder="Paste any video/audio URL — YouTube, TikTok, Instagram, SoundCloud…" autofocus>
+          <button class="btn-primary" id="btn-add">Add to Queue</button>
+        </div>
+
+        <div class="clipboard-banner" id="clipboard-banner">
+          <span class="url-preview" id="clipboard-url"></span>
+          <button id="clipboard-add">Add</button>
+          <button class="dismiss" id="clipboard-dismiss">✕</button>
+        </div>
+
+        <div class="controls-row">
+          <label>Preset</label>
+          <div class="pill-group" id="preset-group">
+            <button class="pill-btn" data-preset="music">Music</button>
+            <button class="pill-btn" data-preset="podcast">Podcast</button>
+            <button class="pill-btn" data-preset="voice">Voice</button>
+            <button class="pill-btn active" data-preset="custom">Custom</button>
+          </div>
+
+          <label style="margin-left:10px">Fmt</label>
+          <div class="pill-group" id="format-group">
+            <button class="pill-btn active" data-fmt="mp3">MP3</button>
+            <button class="pill-btn" data-fmt="wav">WAV</button>
+            <button class="pill-btn" data-fmt="flac">FLAC</button>
+            <button class="pill-btn" data-fmt="m4a">M4A</button>
+          </div>
+
+          <label style="margin-left:10px" id="bitrate-label">Kbps</label>
+          <div class="pill-group" id="bitrate-group">
+            <button class="pill-btn active" data-br="0">Best</button>
+            <button class="pill-btn" data-br="320">320</button>
+            <button class="pill-btn" data-br="192">192</button>
+            <button class="pill-btn" data-br="128">128</button>
+          </div>
+
+          <div class="controls-right">
+            <button class="btn-small" id="btn-batch">Batch</button>
+            <button class="btn-small" id="btn-clear-done">Clear Done</button>
+            <button class="btn-small" id="btn-open-folder">Open Folder ↗</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="queue-list" id="queue-list">
+        <div class="queue-empty">Queue is empty — paste a URL or search above to get started.<br>Drag and drop URLs or .txt files here.</div>
+      </div>
+    </div>
+
+    <!-- ── Search tab ────────────────────────────────────────── -->
+    <div class="tab-content" id="tab-search">
+      <div class="search-section">
+        <div class="input-row">
+          <input type="text" class="url-input" id="search-input" placeholder="Search YouTube…">
+          <button class="btn-primary" id="btn-search">Search</button>
+        </div>
+      </div>
+      <div class="search-results" id="search-results">
+        <div class="search-empty">Search for songs, podcasts, or any audio.</div>
+      </div>
+    </div>
+
+    <!-- ── History tab ───────────────────────────────────────── -->
+    <div class="tab-content" id="tab-history">
+      <div class="history-section">
+        <div class="input-row">
+          <input type="text" class="url-input" id="history-filter" placeholder="Filter history…">
+          <button class="btn-small" id="btn-clear-history" style="padding:10px 14px">Clear All</button>
+        </div>
+      </div>
+      <div class="history-list" id="history-list">
+        <div class="search-empty">No download history yet.</div>
+      </div>
+    </div>
+
+    <!-- ── Settings tab ──────────────────────────────────────── -->
+    <div class="tab-content" id="tab-settings">
+      <div class="settings-scroll">
+        <div class="setting-group">
+          <h3>Output</h3>
+          <div class="setting-row">
+            <span class="setting-label">Output Folder</span>
+            <span class="setting-path" id="settings-folder">Downloads</span>
+            <button class="btn-small" id="btn-pick-folder">Change</button>
+            <button class="btn-small" id="btn-reset-folder">Reset</button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">
+              Auto-organize by source
+              <div class="setting-desc">Create subfolders (YouTube/, SoundCloud/, etc.)</div>
+            </span>
+            <button class="toggle" id="toggle-organize"></button>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <h3>Downloads</h3>
+          <div class="setting-row">
+            <span class="setting-label">Concurrent downloads</span>
+            <div class="pill-group" id="concurrent-group">
+              <button class="pill-btn active" data-n="1">1</button>
+              <button class="pill-btn" data-n="2">2</button>
+              <button class="pill-btn" data-n="3">3</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">
+              Speed limit
+              <div class="setting-desc">0 = unlimited</div>
+            </span>
+            <button class="toggle" id="toggle-speed"></button>
+            <input type="number" class="setting-input" id="speed-limit-input" placeholder="KB/s" min="0" value="0" style="width:80px">
+            <span style="font-size:12px;color:var(--text3)">KB/s</span>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <h3>Metadata</h3>
+          <div class="setting-row">
+            <span class="setting-label">Embed metadata (title, artist, etc.)</span>
+            <button class="toggle on" id="toggle-metadata"></button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Embed thumbnail as album art</span>
+            <button class="toggle on" id="toggle-thumbnail"></button>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <h3>Browser Extension</h3>
+          <div class="setting-row">
+            <span class="setting-label">
+              Enable extension server
+              <div class="setting-desc">Allows the companion browser extension to send URLs</div>
+            </span>
+            <button class="toggle" id="toggle-extension"></button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Port</span>
+            <input type="number" class="setting-input" id="extension-port" value="9638" min="1024" max="65535">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Audio preview bar ─────────────────────────────────── -->
+    <div class="preview-bar" id="preview-bar">
+      <button id="preview-play">▶</button>
+      <span class="preview-title" id="preview-title">—</span>
+      <input type="range" class="seek" id="preview-seek" min="0" max="100" value="0">
+      <span class="preview-time" id="preview-time">0:00</span>
+      <button id="preview-close">✕</button>
+    </div>
+  </div>
+
+  <!-- ── Batch modal ───────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-batch">
+    <div class="modal">
+      <h2>Batch Import</h2>
+      <div class="modal-field">
+        <label>Paste URLs (one per line)</label>
+        <textarea id="batch-urls" placeholder="https://www.youtube.com/watch?v=...&#10;https://soundcloud.com/...&#10;https://www.tiktok.com/..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-modal secondary" id="batch-cancel">Cancel</button>
+        <button class="btn-modal primary" id="batch-add">Add All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Trim modal ────────────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-trim">
+    <div class="modal">
+      <h2>Trim Audio</h2>
+      <div class="modal-field">
+        <label>File</label>
+        <input type="text" id="trim-file" readonly style="color:var(--text3)">
+      </div>
+      <div style="display:flex;gap:12px">
+        <div class="modal-field" style="flex:1">
+          <label>Start Time (e.g. 0:30 or 30)</label>
+          <input type="text" id="trim-start" placeholder="0:00">
+        </div>
+        <div class="modal-field" style="flex:1">
+          <label>End Time (e.g. 3:45 or 225)</label>
+          <input type="text" id="trim-end" placeholder="End">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-modal secondary" id="trim-cancel">Cancel</button>
+        <button class="btn-modal primary" id="trim-save">Trim</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tag editor modal ──────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-tags">
+    <div class="modal">
+      <h2>Edit Tags</h2>
+      <div class="modal-field"><label>Title</label><input type="text" id="tag-title"></div>
+      <div class="modal-field"><label>Artist</label><input type="text" id="tag-artist"></div>
+      <div class="modal-field"><label>Album</label><input type="text" id="tag-album"></div>
+      <div class="modal-field"><label>Year</label><input type="text" id="tag-year"></div>
+      <div class="modal-field"><label>Genre</label><input type="text" id="tag-genre"></div>
+      <div class="modal-actions">
+        <button class="btn-modal secondary" id="tags-cancel">Cancel</button>
+        <button class="btn-modal primary" id="tags-save">Save Tags</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Drag overlay ──────────────────────────────────────── -->
+  <div class="drag-overlay" id="drag-overlay">
+    <div class="drag-icon">📥</div>
+    <div class="drag-text">Drop URLs or .txt files</div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
