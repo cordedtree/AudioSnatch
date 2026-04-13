@@ -263,6 +263,36 @@ async function searchYouTube(query, count = 10) {
   }));
 }
 
+// ── Radio / Streaming ──────────────────────────────────────────────────────────
+
+/** Get a direct streamable audio URL for a given video URL */
+function getStreamUrl(url) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ytDlpPath(), ['-g', '-f', 'bestaudio', '--no-warnings', '--no-playlist', url]);
+    let out = '', err = '';
+    proc.stdout.on('data', d => out += d);
+    proc.stderr.on('data', d => err += d);
+    proc.on('close', code => {
+      if (code === 0 && out.trim()) resolve(out.trim().split('\n')[0]);
+      else reject(new Error(err.trim() || 'Failed to get stream URL'));
+    });
+    proc.on('error', reject);
+  });
+}
+
+/** Search for related tracks and return them with metadata */
+async function getRelatedTracks(query, count = 5) {
+  const data = await runYtDlpJson([`ytsearch${count}:${query}`, '-J', '--no-warnings', '--flat-playlist']);
+  if (!data.entries) return [];
+  return data.entries.map(e => ({
+    url: e.webpage_url || e.url || `https://www.youtube.com/watch?v=${e.id}`,
+    title: e.title || 'Unknown',
+    thumbnail: e.thumbnails?.slice(-1)[0]?.url || e.thumbnail || null,
+    channel: e.channel || e.uploader || '',
+    duration: e.duration || 0,
+  }));
+}
+
 // ── Audio download ─────────────────────────────────────────────────────────────
 function downloadAudio(win, { url, format, bitrate, itemId }) {
   const settings = loadSettings();
@@ -592,6 +622,24 @@ ipcMain.handle('clear-history', () => { saveHistory([]); return { ok: true }; })
 ipcMain.handle('add-to-history', (_e, entry) => { addToHistory(entry); });
 
 ipcMain.handle('notify-queue-complete', () => notifyQueueComplete());
+
+ipcMain.handle('get-stream-url', async (_e, url) => {
+  try {
+    const streamUrl = await getStreamUrl(url);
+    return { ok: true, streamUrl };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-related-tracks', async (_e, query, count) => {
+  try {
+    const tracks = await getRelatedTracks(query, count || 5);
+    return { ok: true, tracks };
+  } catch (err) {
+    return { ok: false, error: err.message, tracks: [] };
+  }
+});
 
 ipcMain.handle('get-file-url', (_e, filepath) => {
   if (filepath && existsSync(filepath)) return `file:///${filepath.replace(/\\/g, '/')}`;

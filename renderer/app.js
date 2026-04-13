@@ -536,30 +536,70 @@ function makeIconBtn(icon, extraClass, onClick, title) {
   return btn;
 }
 
-// ── Audio preview player ───────────────────────────────────────────────────────
+// ── Audio preview player + Radio ───────────────────────────────────────────────
+let radioMode = false;
+let radioHistory = [];     // URLs already played in this radio session
+let currentStreamInfo = null; // { url, title, channel, thumbnail } for the currently streaming track
+
 function stopPreview() {
   if (currentPreviewAudio) {
     currentPreviewAudio.pause();
     currentPreviewAudio.removeAttribute('src');
-    currentPreviewAudio.load(); // fully release the media resource
+    currentPreviewAudio.load();
     currentPreviewAudio = null;
   }
   currentPreviewItemId = null;
+  currentStreamInfo = null;
   previewBar.classList.remove('show');
   $('preview-play').textContent = '▶';
   previewSeek.value = 0;
   previewTime.textContent = '0:00';
   previewTitle.textContent = '—';
+  $('preview-artist').textContent = '';
+  $('preview-thumb').style.display = 'none';
+  $('preview-download').style.display = 'none';
 }
 
+function setupAudioEvents(audio) {
+  audio.addEventListener('timeupdate', () => {
+    if (currentPreviewAudio && currentPreviewAudio.duration) {
+      previewSeek.value = (currentPreviewAudio.currentTime / currentPreviewAudio.duration) * 100;
+      previewTime.textContent = formatTime(currentPreviewAudio.currentTime);
+    }
+  });
+
+  audio.addEventListener('ended', () => {
+    if (radioMode) {
+      playNextRadioTrack();
+    } else {
+      stopPreview();
+    }
+  });
+}
+
+function showPreviewBar(title, artist, thumbnail, isStream) {
+  previewTitle.textContent = title;
+  $('preview-artist').textContent = artist || '';
+  if (thumbnail) {
+    $('preview-thumb').src = thumbnail;
+    $('preview-thumb').style.display = '';
+    $('preview-thumb').onerror = () => $('preview-thumb').style.display = 'none';
+  } else {
+    $('preview-thumb').style.display = 'none';
+  }
+  // Show download button for streamed (non-local) tracks
+  $('preview-download').style.display = isStream ? '' : 'none';
+  previewBar.classList.add('show');
+  $('preview-play').textContent = '⏸';
+}
+
+/** Play a local file from a completed queue item */
 async function playPreview(item) {
-  // If clicking the same item, toggle off
-  if (currentPreviewItemId === item.id) {
+  if (currentPreviewItemId === item.id && !currentStreamInfo) {
     stopPreview();
     return;
   }
 
-  // Stop any existing playback first
   stopPreview();
 
   const fileUrl = await ipcRenderer.invoke('get-file-url', item.filepath);
@@ -567,25 +607,72 @@ async function playPreview(item) {
 
   currentPreviewItemId = item.id;
   currentPreviewAudio = new Audio(fileUrl);
-  previewTitle.textContent = item.filename || item.title;
-  previewBar.classList.add('show');
-  $('preview-play').textContent = '⏸';
+  showPreviewBar(item.title || item.filename, '', item.thumbnail, false);
+  setupAudioEvents(currentPreviewAudio);
 
-  currentPreviewAudio.addEventListener('timeupdate', () => {
-    if (currentPreviewAudio && currentPreviewAudio.duration) {
-      previewSeek.value = (currentPreviewAudio.currentTime / currentPreviewAudio.duration) * 100;
-      previewTime.textContent = formatTime(currentPreviewAudio.currentTime);
-    }
-  });
-
-  currentPreviewAudio.addEventListener('ended', () => {
-    // Fully stop — do NOT auto-play anything else
-    stopPreview();
-  });
+  // Seed radio history with this track's title for finding related tracks
+  if (radioMode) radioHistory = [item.title || item.filename];
 
   currentPreviewAudio.play();
 }
 
+/** Stream a track directly from URL (for radio) */
+async function streamTrack(track) {
+  stopPreview();
+
+  previewTitle.textContent = track.title;
+  $('preview-artist').textContent = track.channel || 'Loading stream…';
+  previewBar.classList.add('show');
+  $('preview-play').textContent = '⏸';
+
+  const result = await ipcRenderer.invoke('get-stream-url', track.url);
+  if (!result.ok) {
+    $('preview-artist').textContent = 'Failed to stream — skipping…';
+    if (radioMode) setTimeout(playNextRadioTrack, 1500);
+    return;
+  }
+
+  currentStreamInfo = track;
+  radioHistory.push(track.url);
+
+  currentPreviewAudio = new Audio(result.streamUrl);
+  showPreviewBar(track.title, track.channel, track.thumbnail, true);
+  setupAudioEvents(currentPreviewAudio);
+  currentPreviewAudio.play();
+}
+
+/** Find and play the next related track */
+async function playNextRadioTrack() {
+  // Build a search query from what was just playing
+  const lastTitle = currentStreamInfo?.title || previewTitle.textContent || '';
+  const query = lastTitle.replace(/\(.*?\)|\[.*?\]/g, '').trim() + ' similar music';
+
+  previewTitle.textContent = 'Finding next track…';
+  $('preview-artist').textContent = '';
+  $('preview-play').textContent = '⏸';
+  $('preview-download').style.display = 'none';
+
+  const result = await ipcRenderer.invoke('get-related-tracks', query, 8);
+  if (!result.ok || result.tracks.length === 0) {
+    $('preview-artist').textContent = 'No more tracks found';
+    setTimeout(stopPreview, 2000);
+    return;
+  }
+
+  // Pick a track we haven't played yet
+  const next = result.tracks.find(t => !radioHistory.includes(t.url));
+  if (!next) {
+    // All played, reset history and try again with different query
+    radioHistory = radioHistory.slice(-3);
+    const fallback = result.tracks[Math.floor(Math.random() * result.tracks.length)];
+    await streamTrack(fallback);
+    return;
+  }
+
+  await streamTrack(next);
+}
+
+// Preview controls
 $('preview-play').addEventListener('click', () => {
   if (!currentPreviewAudio) return;
   if (currentPreviewAudio.paused) { currentPreviewAudio.play(); $('preview-play').textContent = '⏸'; }
@@ -598,8 +685,27 @@ previewSeek.addEventListener('input', () => {
   }
 });
 
-$('preview-close').addEventListener('click', () => {
-  stopPreview();
+$('preview-close').addEventListener('click', stopPreview);
+
+// Radio toggle
+$('preview-radio').addEventListener('click', () => {
+  radioMode = !radioMode;
+  $('preview-radio').classList.toggle('on', radioMode);
+  if (radioMode) radioHistory = [];
+});
+
+// Download the currently streaming track
+$('preview-download').addEventListener('click', () => {
+  if (!currentStreamInfo) return;
+  queue.push(makeItem({
+    url: currentStreamInfo.url,
+    title: currentStreamInfo.title,
+    thumbnail: currentStreamInfo.thumbnail,
+  }));
+  renderQueue();
+  persistQueue();
+  processQueue();
+  $('preview-download').style.display = 'none';
 });
 
 function formatTime(s) {

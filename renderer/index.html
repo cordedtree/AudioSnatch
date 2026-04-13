@@ -272,14 +272,28 @@
 
     /* ── Preview bar ──────────────────── */
     .preview-bar {
-      display: none; align-items: center; gap: 12px;
+      display: none; align-items: center; gap: 10px;
       padding: 10px 24px; background: var(--bg2); border-top: 1px solid var(--border);
       flex-shrink: 0;
     }
     .preview-bar.show { display: flex; }
-    .preview-bar .preview-title { font-size: 12px; color: var(--text2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .preview-bar button { background: none; border: none; color: var(--text2); font-size: 16px; cursor: pointer; }
+    .preview-bar .preview-thumb {
+      width: 36px; height: 36px; border-radius: 4px; object-fit: cover;
+      background: var(--bg3); flex-shrink: 0;
+    }
+    .preview-info { flex: 1; min-width: 0; }
+    .preview-bar .preview-title { font-size: 12px; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .preview-bar .preview-artist { font-size: 11px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .preview-bar button { background: none; border: none; color: var(--text2); font-size: 16px; cursor: pointer; flex-shrink: 0; }
     .preview-bar button:hover { color: #fff; }
+    .preview-bar .btn-radio {
+      font-size: 12px; padding: 3px 8px; border-radius: 4px;
+      border: 1px solid var(--border); color: var(--text3);
+    }
+    .preview-bar .btn-radio:hover { border-color: #444; color: var(--text2); }
+    .preview-bar .btn-radio.on { border-color: var(--accent); color: var(--accent2); background: var(--accent-bg); }
+    .preview-bar .btn-dl { color: var(--green); font-size: 14px; }
+    .preview-bar .btn-dl:hover { color: #55efc4; }
     .preview-bar .seek {
       flex: 1; max-width: 200px; height: 3px; -webkit-appearance: none; appearance: none;
       background: var(--bg3); border-radius: 2px; outline: none; cursor: pointer;
@@ -504,9 +518,15 @@
     <!-- ── Audio preview bar ─────────────────────────────────── -->
     <div class="preview-bar" id="preview-bar">
       <button id="preview-play">▶</button>
-      <span class="preview-title" id="preview-title">—</span>
+      <img class="preview-thumb" id="preview-thumb" src="" style="display:none">
+      <div class="preview-info">
+        <div class="preview-title" id="preview-title">—</div>
+        <div class="preview-artist" id="preview-artist"></div>
+      </div>
       <input type="range" class="seek" id="preview-seek" min="0" max="100" value="0">
       <span class="preview-time" id="preview-time">0:00</span>
+      <button class="btn-dl" id="preview-download" title="Download this track">⬇</button>
+      <button class="btn-radio" id="preview-radio" title="Auto-play similar tracks">Radio</button>
       <button id="preview-close">✕</button>
     </div>
   </div>
