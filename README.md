@@ -83,6 +83,10 @@ A companion extension for Chrome and Opera GX lets you send the current tab's UR
 
 ## Building from Source
 
+> **Most users can ignore this section.** If you just want to use AudioSnatch, download the installer from the [Releases](https://github.com/Cordedtree/AudioSnatch/releases) page — no setup required.
+
+This is only needed if you want to modify the code or build the app yourself.
+
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v18+)
 - npm
