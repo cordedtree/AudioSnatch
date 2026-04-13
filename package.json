@@ -1,6 +1,6 @@
 {
   "name": "audiosnatch",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Universal audio downloader — grab audio from YouTube, SoundCloud, TikTok, and 1000+ sites",
   "main": "main.js",
   "scripts": {

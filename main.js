@@ -305,12 +305,16 @@ function downloadAudio(win, { url, format, bitrate, itemId }) {
     outTemplate = path.join(outDir, '%(title)s.%(ext)s');
   }
 
+  // Write final filepath to a temp file so we can reliably read it
+  const filepathLog = path.join(app.getPath('temp'), `audiosnatch-dl-${itemId}.txt`);
+
   const args = [
     '--no-playlist', '-x',
     '--audio-format', format,
     '--ffmpeg-location', binDir(),
     '-o', outTemplate,
     '--newline',
+    '--print-to-file', 'after_move:filepath', filepathLog,
   ];
 
   // Bitrate / quality
@@ -340,7 +344,8 @@ function downloadAudio(win, { url, format, bitrate, itemId }) {
       const match = text.match(/\[download\]\s+([\d.]+)%/);
       if (match) win.webContents.send('item-progress', { itemId, percent: parseFloat(match[1]) });
 
-      const destMatch = text.match(/\[(?:ExtractAudio|Merger|download)\] Destination: (.+)/);
+      // Fallback: try to catch destination from stdout
+      const destMatch = text.match(/Destination: (.+)/);
       if (destMatch) lastFile = destMatch[1].trim();
       const alreadyMatch = text.match(/\[download\] (.+?) has already been downloaded/);
       if (alreadyMatch) lastFile = alreadyMatch[1].trim();
@@ -350,7 +355,14 @@ function downloadAudio(win, { url, format, bitrate, itemId }) {
 
     proc.on('close', (code) => {
       if (code === 0) {
-        const filepath = lastFile || '';
+        // Read the reliable filepath from the temp file
+        let filepath = '';
+        try {
+          filepath = readFileSync(filepathLog, 'utf-8').trim().split('\n').pop().trim();
+          fs.unlinkSync(filepathLog);
+        } catch {
+          filepath = lastFile || ''; // fallback to stdout parsing
+        }
         const filename = filepath ? path.basename(filepath) : '(check output folder)';
         resolve({ ok: true, filename, filepath });
       } else {
