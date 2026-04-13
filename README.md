@@ -138,6 +138,10 @@ YouTube, YouTube Music, SoundCloud, TikTok, Instagram, Twitter/X, Bandcamp, Vime
 
 Spotify playlists and albums are supported via automatic YouTube matching — each track is searched on YouTube and the best match is downloaded.
 
+## Disclaimer
+
+AudioSnatch is intended for personal use with content you have the right to download. Respect copyright laws and the terms of service of the platforms you use. The developers are not responsible for misuse of this tool.
+
 ## License
 
 MIT
